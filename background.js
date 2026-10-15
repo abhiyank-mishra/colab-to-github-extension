@@ -36,7 +36,42 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     await chrome.storage.local.set(defaults);
     console.log('[Colab to GitHub] Defaults initialized successfully.');
   }
+
+  // Auto-inject content scripts into any already open Colab tabs so user doesn't even need to refresh
+  await injectIntoExistingColabTabs();
 });
+
+async function injectIntoExistingColabTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: '*://colab.research.google.com/*' });
+    for (const tab of tabs) {
+      if (!tab.id) continue;
+      try {
+        await chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files: ['content/content.css']
+        });
+      } catch (e) {}
+
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content/content-main.js'],
+          world: 'MAIN'
+        });
+      } catch (e) {}
+
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content/content.js']
+        });
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.log('[Colab to GitHub] Tab auto-injection completed.');
+  }
+}
 
 // Centralized message router
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -78,15 +113,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const fileId = request.fileId;
-        const res = await fetch(`https://docs.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`);
-        if (res.ok) {
-          const text = await res.text();
-          if (text && (text.includes('"cells"') || text.includes('"nbformat"'))) {
-            sendResponse({ success: true, content: text });
-            return;
+        const candidateUrls = [
+          `https://docs.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`,
+          `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&authuser=0`,
+          `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`
+        ];
+
+        let content = null;
+        for (const url of candidateUrls) {
+          try {
+            const res = await fetch(url, { credentials: 'include' });
+            if (res.ok) {
+              const text = await res.text();
+              if (text && (text.includes('"cells"') || text.includes('"nbformat"'))) {
+                content = text;
+                break;
+              }
+            }
+          } catch (e) {
+            console.log('[Colab to GitHub] Drive URL fetch attempt notice:', e.message);
           }
         }
-        sendResponse({ success: false, error: `Drive download status: ${res.status}` });
+
+        if (content) {
+          sendResponse({ success: true, content });
+        } else {
+          sendResponse({ success: false, error: 'Could not fetch valid notebook JSON from Google Drive' });
+        }
       } catch (e) {
         sendResponse({ success: false, error: e.message });
       }

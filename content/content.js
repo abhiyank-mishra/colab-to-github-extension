@@ -8,6 +8,9 @@
 (function () {
   'use strict';
 
+  if (window.__COLAB_TO_GITHUB_INJECTED__) return;
+  window.__COLAB_TO_GITHUB_INJECTED__ = true;
+
   let toastContainer = null;
   let floatingBtn = null;
 
@@ -177,9 +180,9 @@
     });
   }
 
-  // Update floating button visuals based on Push vs Update status
+  // Update floating button visuals based on Push vs Update status (Compact, no badge)
   function updateButtonVisuals() {
-    if (!floatingBtn || floatingBtn.classList.contains('loading')) return;
+    if (!floatingBtn || floatingBtn.classList.contains('loading') || floatingBtn.classList.contains('success-state')) return;
 
     const repoName = notebookState.repoName || 'DSV_Colab';
 
@@ -188,25 +191,23 @@
       floatingBtn.setAttribute('title', `File '${notebookState.filename}' exists in ${repoName}. Click to update changes.`);
       floatingBtn.innerHTML = `
         <div class="c2gh-btn-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path fill-rule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 01.908-.417A6 6 0 118 2v1z"/>
             <path d="M8 4.466V.534a.25.25 0 01.41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 018 4.466z"/>
           </svg>
         </div>
         <span>Update</span>
-        <span class="c2gh-btn-badge">${repoName}</span>
       `;
     } else {
       floatingBtn.className = 'c2gh-floating-btn';
       floatingBtn.setAttribute('title', `New file '${notebookState.filename}'. Click to push to ${repoName}.`);
       floatingBtn.innerHTML = `
         <div class="c2gh-btn-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
           </svg>
         </div>
         <span>Push</span>
-        <span class="c2gh-btn-badge">${repoName}</span>
       `;
     }
   }
@@ -255,7 +256,7 @@
         notebookState.fileUrl = res.fileUrl || null;
       }
     } catch (e) {
-      console.warn('[Colab to GitHub] Error checking file status:', e);
+      console.log('[Colab to GitHub] Error checking file status:', e.message);
     } finally {
       notebookState.checking = false;
       updateButtonVisuals();
@@ -288,7 +289,7 @@
           await chrome.storage.local.set({ github_token: token });
         }
       } catch (e) {
-        console.warn('[Colab to GitHub] Could not fetch default token:', e);
+        console.log('[Colab to GitHub] Could not fetch default token notice:', e.message);
       }
     }
 
@@ -304,13 +305,13 @@
 
     const isUpdate = notebookState.existsOnGithub;
 
-    // Set button loading
+    // Stage 1 Animation: Reading / Extracting notebook
     if (floatingBtn) {
-      floatingBtn.classList.add('loading');
+      floatingBtn.className = 'c2gh-floating-btn loading';
       floatingBtn.innerHTML = `
-        <div class="c2gh-spinner"></div>
-        <span>${isUpdate ? 'Updating...' : 'Pushing...'}</span>
-        <span class="c2gh-btn-badge">${repoName}</span>
+        <div class="c2gh-btn-spinner"></div>
+        <span>Reading...</span>
+        <div class="c2gh-btn-progress" style="width: 35%;"></div>
       `;
     }
 
@@ -339,7 +340,7 @@
             content = driveRes.content;
           }
         } catch (e) {
-          console.warn('[Colab to GitHub] Background drive fetch error:', e);
+          console.log('[Colab to GitHub] Background drive fetch notice:', e.message);
         }
       }
 
@@ -361,6 +362,15 @@
         ? `Update ${fileName} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`
         : `Add ${fileName} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`;
 
+      // Stage 2 Animation: Rocket Pushing to GitHub
+      if (floatingBtn) {
+        floatingBtn.innerHTML = `
+          <span class="c2gh-btn-icon c2gh-anim-rocket">🚀</span>
+          <span>${isUpdate ? 'Updating...' : 'Pushing...'}</span>
+          <div class="c2gh-btn-progress" style="width: 80%;"></div>
+        `;
+      }
+
       // 2. Delegate push to background worker
       const pushResponse = await chrome.runtime.sendMessage({
         action: 'EXECUTE_GITHUB_PUSH',
@@ -381,6 +391,16 @@
       notebookState.existsOnGithub = true;
       notebookState.fileUrl = pushResponse.fileUrl;
 
+      // Stage 3 Animation: Pop Success Animation
+      if (floatingBtn) {
+        floatingBtn.className = 'c2gh-floating-btn success-state';
+        floatingBtn.innerHTML = `
+          <span class="c2gh-btn-icon c2gh-anim-pop">✅</span>
+          <span>${pushResponse.isUpdate ? 'Updated!' : 'Pushed!'}</span>
+          <div class="c2gh-btn-progress" style="width: 100%;"></div>
+        `;
+      }
+
       // 3. Success Toast
       showToast({
         title: pushResponse.isUpdate ? '✅ Updated in DSV_Colab!' : '✅ Pushed to DSV_Colab!',
@@ -391,8 +411,32 @@
         duration: 10000
       });
 
+      // Restore to compact idle state after 2.2 seconds
+      setTimeout(() => {
+        if (floatingBtn) {
+          floatingBtn.classList.remove('success-state', 'loading');
+          updateButtonVisuals();
+        }
+      }, 2200);
+
     } catch (err) {
       console.error('[Colab to GitHub] Push error:', err);
+
+      // Error Animation
+      if (floatingBtn) {
+        floatingBtn.className = 'c2gh-floating-btn error-state';
+        floatingBtn.innerHTML = `
+          <span class="c2gh-btn-icon">❌</span>
+          <span>Failed</span>
+        `;
+        setTimeout(() => {
+          if (floatingBtn) {
+            floatingBtn.classList.remove('error-state', 'loading');
+            updateButtonVisuals();
+          }
+        }, 2500);
+      }
+
       showToast({
         title: isUpdate ? '❌ Update Failed' : '❌ Push Failed',
         message: err.message || 'An error occurred while pushing to GitHub.',
@@ -400,12 +444,8 @@
         duration: 8000
       });
     } finally {
-      if (floatingBtn) {
-        floatingBtn.classList.remove('loading');
-        updateButtonVisuals();
-      }
       // Re-verify file state with GitHub
-      setTimeout(checkFileOnGitHub, 1000);
+      setTimeout(checkFileOnGitHub, 1200);
     }
   }
 
@@ -471,7 +511,7 @@
               content = driveRes.content;
             }
           } catch (e) {
-            console.warn('[Colab to GitHub] Background drive fetch error:', e);
+            console.log('[Colab to GitHub] Background drive fetch notice:', e.message);
           }
         }
 

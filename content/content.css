@@ -2,24 +2,26 @@
 
 .c2gh-floating-btn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 22px;
+  right: 22px;
   z-index: 999999;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 7px;
+  padding: 6px 14px;
+  min-height: 32px;
   background: #161b22;
   color: #f0f6fc;
-  border: 1px solid rgba(240, 246, 252, 0.15);
+  border: 1px solid rgba(240, 246, 252, 0.18);
   border-radius: 9999px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
+  overflow: hidden;
 }
 
 .c2gh-floating-btn:hover {
@@ -27,93 +29,136 @@
   border-color: #58a6ff;
   color: #58a6ff;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(88, 166, 255, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(88, 166, 255, 0.25);
 }
 
 .c2gh-floating-btn:active {
   transform: translateY(0);
 }
 
-.c2gh-floating-btn.loading {
-  opacity: 0.85;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
+/* Update mode (cyan/blue accent) */
 .c2gh-floating-btn.update-mode {
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: rgba(56, 189, 248, 0.35);
   background: #0f172a;
 }
 
 .c2gh-floating-btn.update-mode:hover {
   border-color: #38bdf8;
   color: #38bdf8;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 
-.c2gh-floating-btn.update-mode .c2gh-btn-badge {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.35);
+/* Loading & Animated States */
+.c2gh-floating-btn.loading {
+  cursor: wait;
+  pointer-events: none;
+  background: #1c2128;
+  border-color: #58a6ff;
+  box-shadow: 0 0 15px rgba(88, 166, 255, 0.3), 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.c2gh-floating-btn.success-state {
+  background: #143521 !important;
+  border-color: #3fb950 !important;
+  color: #3fb950 !important;
+  box-shadow: 0 0 18px rgba(63, 185, 80, 0.4), 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+.c2gh-floating-btn.error-state {
+  background: #3c1e1e !important;
+  border-color: #f85149 !important;
+  color: #f85149 !important;
+  animation: c2gh-shake 0.4s ease;
+}
+
+/* Progress bar along bottom of button */
+.c2gh-btn-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  width: 0%;
+  background: linear-gradient(90deg, #58a6ff, #3fb950);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 9999px;
 }
 
 .c2gh-btn-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
 }
 
-.c2gh-btn-badge {
-  background: rgba(249, 171, 0, 0.18);
-  color: #f9ab00;
-  border: 1px solid rgba(249, 171, 0, 0.35);
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-weight: 700;
-  margin-left: 2px;
-}
-
-/* Spinner */
-.c2gh-spinner {
-  width: 14px;
-  height: 14px;
+/* Spinner Icon */
+.c2gh-btn-spinner {
+  width: 13px;
+  height: 13px;
   border: 2px solid rgba(240, 246, 252, 0.2);
   border-top-color: #58a6ff;
   border-radius: 50%;
-  animation: c2gh-spin 0.7s linear infinite;
+  animation: c2gh-spin 0.65s linear infinite;
+}
+
+/* Rocket Launch Animation */
+.c2gh-anim-rocket {
+  display: inline-block;
+  animation: c2gh-rocket-pulse 0.7s ease infinite alternate;
+}
+
+@keyframes c2gh-rocket-pulse {
+  from { transform: translateY(1px) scale(0.95); }
+  to { transform: translateY(-2px) scale(1.1); }
+}
+
+/* Success Pop Animation */
+.c2gh-anim-pop {
+  display: inline-block;
+  animation: c2gh-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes c2gh-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes c2gh-spin {
   to { transform: rotate(360deg); }
 }
 
+@keyframes c2gh-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-3px); }
+}
+
 /* Toast Notifications */
 .c2gh-toast-container {
   position: fixed;
-  bottom: 80px;
-  right: 24px;
+  bottom: 66px;
+  right: 22px;
   z-index: 1000000;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   pointer-events: none;
 }
 
 .c2gh-toast {
   pointer-events: auto;
-  min-width: 280px;
-  max-width: 400px;
-  padding: 12px 16px;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 10px 14px;
   background: #1c2128;
   color: #f0f6fc;
   border: 1px solid #30363d;
-  border-radius: 10px;
+  border-radius: 9px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -122,15 +167,15 @@
 }
 
 .c2gh-toast.success {
-  border-left: 4px solid #3fb950;
+  border-left: 3px solid #3fb950;
 }
 
 .c2gh-toast.error {
-  border-left: 4px solid #f85149;
+  border-left: 3px solid #f85149;
 }
 
 .c2gh-toast.info {
-  border-left: 4px solid #58a6ff;
+  border-left: 3px solid #58a6ff;
 }
 
 .c2gh-toast-body {
@@ -140,21 +185,22 @@
 .c2gh-toast-title {
   font-weight: 600;
   margin-bottom: 2px;
+  font-size: 12px;
 }
 
 .c2gh-toast-msg {
   color: #8b949e;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .c2gh-toast-link {
   display: inline-block;
-  margin-top: 6px;
+  margin-top: 5px;
   color: #58a6ff;
   text-decoration: none;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .c2gh-toast-link:hover {
@@ -167,7 +213,7 @@
   color: #8b949e;
   cursor: pointer;
   padding: 0;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -178,7 +224,7 @@
 @keyframes c2gh-slide-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;

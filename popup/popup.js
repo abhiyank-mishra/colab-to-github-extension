@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
     } catch (e) {
-      console.warn('Auto connect failed:', e);
+      console.log('[Colab to GitHub] Auto connect notice:', e.message);
     }
   }
 
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await chrome.storage.local.set({ github_token: token });
         }
       } catch (e) {
-        console.warn('Auto-fetch default token failed:', e);
+        console.log('[Colab to GitHub] Auto-fetch default token notice:', e.message);
       }
     }
 
@@ -206,6 +206,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isColabTab) {
         pushControlsCard.classList.remove('hidden');
       }
+    }
+  }
+
+  // Dynamically inject content scripts if tab was opened before extension reload
+  async function ensureContentScriptInjected(tabId) {
+    if (!tabId) return false;
+    try {
+      await chrome.scripting.insertCSS({
+        target: { tabId },
+        files: ['content/content.css']
+      });
+    } catch (e) {}
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/content-main.js'],
+        world: 'MAIN'
+      });
+    } catch (e) {}
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/content.js']
+      });
+      await new Promise(r => setTimeout(r, 150));
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -239,13 +269,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 1. Query active tab for live notebook info directly from Colab DOM
         try {
-          const info = await chrome.tabs.sendMessage(tab.id, { action: 'GET_NOTEBOOK_INFO' });
+          let info = null;
+          try {
+            info = await chrome.tabs.sendMessage(tab.id, { action: 'GET_NOTEBOOK_INFO' });
+          } catch (firstErr) {
+            // Tab might need dynamic script injection
+            await ensureContentScriptInjected(tab.id);
+            try {
+              info = await chrome.tabs.sendMessage(tab.id, { action: 'GET_NOTEBOOK_INFO' });
+            } catch (retryErr) {
+              // Non-critical fallback
+            }
+          }
+
           if (info && info.filename) {
             detectedName = info.filename;
             fileExists = Boolean(info.existsOnGithub);
           }
         } catch (e) {
-          console.warn('Could not query Colab tab directly:', e);
+          console.log('[Colab to GitHub] Tab info query fallback:', e.message);
         }
 
         // Fallback to title parsing if message didn't reply
@@ -297,7 +339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         pushControlsCard.classList.add('hidden');
       }
     } catch (err) {
-      console.warn('Error checking active tab:', err);
+      console.log('[Colab to GitHub] Error checking active tab:', err.message);
       colabStatus.className = 'colab-status disconnected';
       colabStatusText.textContent = 'Detection Error';
     }
@@ -370,12 +412,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function extractNotebookFromTab(tab) {
     // Strategy 1: Message active content script
     try {
-      const res = await chrome.tabs.sendMessage(tab.id, { action: 'EXTRACT_FROM_PAGE' });
+      let res = null;
+      try {
+        res = await chrome.tabs.sendMessage(tab.id, { action: 'EXTRACT_FROM_PAGE' });
+      } catch (firstErr) {
+        console.log('[Colab to GitHub] Content script inactive, attempting dynamic injection...');
+        const injected = await ensureContentScriptInjected(tab.id);
+        if (injected) {
+          try {
+            res = await chrome.tabs.sendMessage(tab.id, { action: 'EXTRACT_FROM_PAGE' });
+          } catch (retryErr) {
+            console.log('[Colab to GitHub] Extraction retry after injection failed:', retryErr.message);
+          }
+        }
+      }
+
       if (res && res.success && res.content) {
         return res;
       }
     } catch (err) {
-      console.warn('[Colab to GitHub] Direct content script message failed, falling back:', err.message);
+      console.log('[Colab to GitHub] Direct content script message notice:', err.message);
     }
 
     // Strategy 2: Google Drive direct fetch via background service worker (handles unrefreshed tabs)
@@ -396,7 +452,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           };
         }
       } catch (e) {
-        console.warn('[Colab to GitHub] Background drive fetch warning:', e);
+        console.log('[Colab to GitHub] Background drive fetch notice:', e.message);
       }
     }
 
@@ -486,7 +542,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
       }
     } catch (e) {
-      console.warn('[Colab to GitHub] Dynamic scripting execution failed:', e);
+      console.log('[Colab to GitHub] Dynamic scripting execution notice:', e.message);
     }
 
     throw new Error('Could not connect to Colab tab. Please refresh the Colab tab (F5) once and try again.');

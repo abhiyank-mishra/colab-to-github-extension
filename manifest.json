@@ -12,7 +12,10 @@
   "host_permissions": [
     "https://colab.research.google.com/*",
     "https://api.github.com/*",
-    "https://docs.google.com/*"
+    "https://docs.google.com/*",
+    "https://drive.google.com/*",
+    "https://drive.usercontent.google.com/*",
+    "https://*.googleusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js"

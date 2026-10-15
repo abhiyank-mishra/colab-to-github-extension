@@ -276,7 +276,7 @@
             }, 200);
           }
         } catch (e) {
-          console.warn('[Colab to GitHub] Menu navigation warning:', e);
+          console.log('[Colab to GitHub] Menu navigation notice:', e.message);
         }
       }, 100);
 
