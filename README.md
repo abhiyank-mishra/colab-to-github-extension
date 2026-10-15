@@ -19,25 +19,28 @@ Agar aapke GitHub account me `DSV_Colab` repository pehle se nahi bani hui hai, 
 
 ## 🛠️ Installation Guide (Kaise Install Karein)
 
-1. **Chrome Browser Kholein:**
+1. **Repository Download / Clone Karein:**
+   ```bash
+   git clone https://github.com/abhiyank-mishra/colab-to-github-extension.git
+   ```
+   *(Ya fir ZIP download karke extract kar lein)*
+
+2. **Chrome Browser Kholein:**
    URL bar me type karein:
    ```text
    chrome://extensions/
    ```
    aur `Enter` dabayein.
 
-2. **Developer Mode On Karein:**
+3. **Developer Mode On Karein:**
    Top-right corner me **"Developer mode"** toggle switch hoga, use **ON** kar dein.
 
-3. **Extension Load Karein:**
-   Top-left me **"Load unpacked"** button par click karein.
-
-4. **Folder Select Karein:**
-   Following path wala folder select karein:
+4. **Extension Load Karein:**
+   Top-left me **"Load unpacked"** button par click karein aur downloaded `colab-to-github-extension` folder select karein:
    ```text
-   C:\Users\hello\.gemini\antigravity\scratch\colab-to-github-extension
+   colab-to-github-extension
    ```
-   Extension Chrome me install ho jayegi!
+   Extension Chrome me successfully load ho jayegi!
 
 ---
 
@@ -66,9 +69,9 @@ Extension ko GitHub par repo check/create aur push karne ke liye Personal Access
 
 ### Option 1: Direct Colab ke andar Floating Button se (Sabse Fast!)
 1. Apna koi bhi Google Colab notebook kholein (`https://colab.research.google.com/...`).
-2. Bottom-right corner me aapko ek sleek floating button dikhega: **`Push DSV_Colab`**.
+2. Bottom-right corner me aapko ek sleek compact button dikhega: **`Push`** (new notebook ke liye) ya **`Update`** (agar notebook pehle se `DSV_Colab` me exist karti hai).
 3. Bas us button par click karein!
-4. Extension notebook ko extract karegi, repo check karegi aur direct commit push kar degi.
+4. Real-time **3-Stage Live Animation** chalegi (`Reading...` -> 🚀 `Pushing...` -> ✅ `Pushed!`), aur notebook direct GitHub par commit ho jayegi.
 5. Success toast notification aayega with **"View on GitHub ↗"** direct link!
 
 ### Option 2: Extension Popup se
