@@ -366,6 +366,132 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSettings();
   });
 
+  // Multi-tier extractor: Messages content script, falls back to background Drive fetch or direct scripting
+  async function extractNotebookFromTab(tab) {
+    // Strategy 1: Message active content script
+    try {
+      const res = await chrome.tabs.sendMessage(tab.id, { action: 'EXTRACT_FROM_PAGE' });
+      if (res && res.success && res.content) {
+        return res;
+      }
+    } catch (err) {
+      console.warn('[Colab to GitHub] Direct content script message failed, falling back:', err.message);
+    }
+
+    // Strategy 2: Google Drive direct fetch via background service worker (handles unrefreshed tabs)
+    const driveMatch = (tab.url || '').match(/\/drive\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch && driveMatch[1]) {
+      try {
+        console.log('[Colab to GitHub] Attempting background Google Drive fetch for fileId:', driveMatch[1]);
+        const driveRes = await chrome.runtime.sendMessage({
+          action: 'FETCH_DRIVE_NOTEBOOK',
+          fileId: driveMatch[1]
+        });
+        if (driveRes && driveRes.success && driveRes.content) {
+          return {
+            success: true,
+            content: driveRes.content,
+            filename: notebookFileName.value.trim() || 'Colab_Notebook.ipynb',
+            method: 'background-drive'
+          };
+        }
+      } catch (e) {
+        console.warn('[Colab to GitHub] Background drive fetch warning:', e);
+      }
+    }
+
+    // Strategy 3: Dynamic script execution via chrome.scripting.executeScript
+    try {
+      console.log('[Colab to GitHub] Attempting direct in-tab execution via chrome.scripting...');
+      const [execResult] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          // A. Try internal model
+          try {
+            const m = window.colab?.global?.notebook || window._colab?.notebook;
+            if (m && typeof m.toJSON === 'function') {
+              return { success: true, content: JSON.stringify(m.toJSON(), null, 2) };
+            }
+          } catch (e) {}
+
+          // B. DOM Cell Scraper
+          const cells = [];
+          const cellEls = document.querySelectorAll('colab-cell, .cell, [class*="colab-cell"]');
+          cellEls.forEach((cellEl, idx) => {
+            const isCode = cellEl.tagName.toLowerCase().includes('code') || 
+                           cellEl.classList.contains('code') || 
+                           Boolean(cellEl.querySelector('.code-cell, .monaco-editor, .view-lines'));
+            
+            const textEditor = cellEl.querySelector('.monaco-editor, .view-lines, textarea, pre');
+            let sourceText = '';
+            if (textEditor) {
+              const lines = textEditor.querySelectorAll('.view-line');
+              if (lines.length > 0) {
+                sourceText = Array.from(lines).map(l => l.textContent).join('\n');
+              } else {
+                sourceText = textEditor.textContent || textEditor.value || '';
+              }
+            } else {
+              sourceText = cellEl.textContent || '';
+            }
+
+            const formattedSource = sourceText.split('\n').map((l, i, arr) => (i < arr.length - 1 ? `${l}\n` : l));
+
+            if (isCode) {
+              cells.push({
+                cell_type: 'code',
+                execution_count: idx + 1,
+                metadata: { id: `cell_${idx}` },
+                outputs: [],
+                source: formattedSource
+              });
+            } else {
+              cells.push({
+                cell_type: 'markdown',
+                metadata: { id: `cell_${idx}` },
+                source: formattedSource
+              });
+            }
+          });
+
+          const ipynb = {
+            nbformat: 4,
+            nbformat_minor: 0,
+            metadata: {
+              colab: { provenance: [] },
+              kernelspec: { name: "python3", display_name: "Python 3" },
+              language_info: { name: "python" }
+            },
+            cells: cells.length > 0 ? cells : [
+              {
+                cell_type: "code",
+                execution_count: 1,
+                metadata: { id: "cell_init" },
+                outputs: [],
+                source: ["# Exported from Google Colab\n"]
+              }
+            ]
+          };
+
+          return { success: true, content: JSON.stringify(ipynb, null, 2) };
+        }
+      });
+
+      if (execResult?.result?.success && execResult.result.content) {
+        return {
+          success: true,
+          content: execResult.result.content,
+          filename: notebookFileName.value.trim() || 'Colab_Notebook.ipynb',
+          method: 'scripting-exec'
+        };
+      }
+    } catch (e) {
+      console.warn('[Colab to GitHub] Dynamic scripting execution failed:', e);
+    }
+
+    throw new Error('Could not connect to Colab tab. Please refresh the Colab tab (F5) once and try again.');
+  }
+
   // Handle Primary Push Button
   primaryPushBtn.addEventListener('click', async () => {
     if (!isColabTab || !activeTab) return;
@@ -397,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     successCard.classList.add('hidden');
     errorCard.classList.add('hidden');
     primaryPushBtn.disabled = true;
-    primaryPushBtnText.textContent = 'Pushing...';
+    primaryPushBtnText.textContent = currentFileExists ? 'Updating...' : 'Pushing...';
 
     // Show Progress Stepper
     progressStepper.classList.remove('hidden');
@@ -406,13 +532,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     stepPush.className = 'stepper-item';
 
     try {
-      // 1. Extract notebook from Colab tab
-      const extractRes = await chrome.tabs.sendMessage(activeTab.id, {
-        action: 'EXTRACT_FROM_PAGE'
-      });
+      // 1. Extract notebook from Colab tab with multi-tier fallback
+      const extractRes = await extractNotebookFromTab(activeTab);
 
-      if (!extractRes || !extractRes.success) {
-        throw new Error(extractRes?.error || 'Failed to extract notebook from Colab page.');
+      if (!extractRes || !extractRes.content) {
+        throw new Error('Failed to extract notebook content from Colab tab.');
       }
 
       stepExtract.className = 'stepper-item done';
