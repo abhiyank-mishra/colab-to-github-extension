@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Colab to GitHub (DSV_Colab)",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "1-Click direct push from Google Colab notebooks to your GitHub repository (DSV_Colab).",
   "permissions": [
     "storage",

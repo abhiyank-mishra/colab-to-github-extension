@@ -586,6 +586,8 @@
           } catch (e) {
             console.log('[Colab to GitHub] Background drive fetch notice:', e.message);
           }
+        }
+
         if (!content || !content.trim()) {
           content = reconstructNotebookFromDOM();
         }
