@@ -95,6 +95,76 @@
     return 'Colab_Notebook.ipynb';
   }
 
+  /**
+   * DOM cell scraper and Jupyter notebook JSON builder
+   */
+  function reconstructNotebookFromDOM() {
+    try {
+      const cells = [];
+      const cellEls = document.querySelectorAll('colab-cell, .cell, [class*="colab-cell"]');
+      cellEls.forEach((cellEl, idx) => {
+        const isCode = cellEl.tagName.toLowerCase().includes('code') || 
+                       cellEl.classList.contains('code') || 
+                       Boolean(cellEl.querySelector('.code-cell, .monaco-editor, .view-lines'));
+        
+        const textEditor = cellEl.querySelector('.monaco-editor, .view-lines, textarea, pre');
+        let sourceText = '';
+        if (textEditor) {
+          const lines = textEditor.querySelectorAll('.view-line');
+          if (lines.length > 0) {
+            sourceText = Array.from(lines).map(l => l.textContent).join('\n');
+          } else {
+            sourceText = textEditor.textContent || textEditor.value || '';
+          }
+        } else {
+          sourceText = cellEl.textContent || '';
+        }
+
+        const formattedSource = sourceText.split('\n').map((l, i, arr) => (i < arr.length - 1 ? `${l}\n` : l));
+
+        if (isCode) {
+          cells.push({
+            cell_type: 'code',
+            execution_count: idx + 1,
+            metadata: { id: `cell_${idx}` },
+            outputs: [],
+            source: formattedSource
+          });
+        } else {
+          cells.push({
+            cell_type: 'markdown',
+            metadata: { id: `cell_${idx}` },
+            source: formattedSource
+          });
+        }
+      });
+
+      const ipynb = {
+        nbformat: 4,
+        nbformat_minor: 0,
+        metadata: {
+          colab: { provenance: [] },
+          kernelspec: { name: 'python3', display_name: 'Python 3' },
+          language_info: { name: 'python' }
+        },
+        cells: cells.length > 0 ? cells : [
+          {
+            cell_type: 'code',
+            execution_count: 1,
+            metadata: { id: 'cell_init' },
+            outputs: [],
+            source: ['# Exported from Google Colab\n']
+          }
+        ]
+      };
+
+      return JSON.stringify(ipynb, null, 2);
+    } catch (e) {
+      console.log('[Colab to GitHub] DOM cell scraper notice:', e.message);
+      return null;
+    }
+  }
+
   function createToastContainer() {
     if (!toastContainer) {
       toastContainer = document.createElement('div');
@@ -325,12 +395,9 @@
     try {
       // 1. Extract notebook
       const extractResult = await requestExtraction();
-      if (!extractResult.success && !extractResult.needsDriveFetch) {
-        throw new Error(extractResult.error || 'Failed to extract notebook content.');
-      }
+      let content = extractResult?.content;
 
-      let content = extractResult.content;
-      if (extractResult.needsDriveFetch && extractResult.fileId && !content) {
+      if (extractResult?.needsDriveFetch && extractResult?.fileId && !content) {
         try {
           const driveRes = await chrome.runtime.sendMessage({
             action: 'FETCH_DRIVE_NOTEBOOK',
@@ -344,12 +411,17 @@
         }
       }
 
-      if (!content) {
+      // High-reliability DOM fallback if content is still empty
+      if (!content || !content.trim()) {
+        content = reconstructNotebookFromDOM();
+      }
+
+      if (!content || !content.trim()) {
         throw new Error('Could not retrieve notebook content. Please make sure the notebook is open.');
       }
 
       // Priority: use the accurately detected filename
-      let fileName = extractResult.filename || getNotebookName();
+      let fileName = extractResult?.filename || getNotebookName();
       notebookState.filename = fileName;
 
       let filePath = fileName;
@@ -378,7 +450,7 @@
         repoName,
         branch,
         filePath,
-        content: extractResult.content,
+        content: content,
         commitMessage,
         isPrivate
       });
@@ -513,6 +585,8 @@
           } catch (e) {
             console.log('[Colab to GitHub] Background drive fetch notice:', e.message);
           }
+        if (!content || !content.trim()) {
+          content = reconstructNotebookFromDOM();
         }
 
         sendResponse({
