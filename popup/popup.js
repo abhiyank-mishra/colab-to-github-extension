@@ -24,6 +24,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   const commitMessageInput = document.getElementById('commitMessageInput');
   const primaryPushBtn = document.getElementById('primaryPushBtn');
   const primaryPushBtnText = document.getElementById('primaryPushBtnText');
+  const primaryPushBtnIcon = document.getElementById('primaryPushBtnIcon');
+  const fileModeBadge = document.getElementById('fileModeBadge');
+  const fileModeText = document.getElementById('fileModeText');
+  const fileStatusIndicator = document.getElementById('fileStatusIndicator');
+  const fileExistingHint = document.getElementById('fileExistingHint');
+
+  let currentFileExists = false;
+
+  function updatePushUIState(exists, filename, repoName) {
+    currentFileExists = Boolean(exists);
+    const cleanName = filename || notebookFileName.value.trim() || 'notebook.ipynb';
+    const cleanRepo = repoName || displayRepoName.textContent || 'DSV_Colab';
+
+    if (currentFileExists) {
+      if (fileModeBadge) {
+        fileModeBadge.className = 'mode-pill update';
+        if (fileModeText) fileModeText.textContent = '🔄 Existing File';
+      }
+      if (fileStatusIndicator) {
+        fileStatusIndicator.className = 'file-status-indicator existing';
+        fileStatusIndicator.textContent = '(Found on GitHub)';
+      }
+      if (fileExistingHint) {
+        fileExistingHint.textContent = `File already exists in ${cleanRepo}. Pushing will update the commit.`;
+        fileExistingHint.classList.remove('hidden');
+      }
+      primaryPushBtn.className = 'btn btn-primary btn-block btn-update';
+      if (primaryPushBtnIcon) primaryPushBtnIcon.textContent = '🔄';
+      primaryPushBtnText.textContent = `Update in ${cleanRepo}`;
+      commitMessageInput.value = `Update ${cleanName} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`;
+    } else {
+      if (fileModeBadge) {
+        fileModeBadge.className = 'mode-pill new';
+        if (fileModeText) fileModeText.textContent = '✨ New File';
+      }
+      if (fileStatusIndicator) {
+        fileStatusIndicator.className = 'file-status-indicator new';
+        fileStatusIndicator.textContent = '(New)';
+      }
+      if (fileExistingHint) {
+        fileExistingHint.classList.add('hidden');
+      }
+      primaryPushBtn.className = 'btn btn-primary btn-block';
+      if (primaryPushBtnIcon) primaryPushBtnIcon.textContent = '🚀';
+      primaryPushBtnText.textContent = `Push to ${cleanRepo}`;
+      commitMessageInput.value = `Add ${cleanName} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`;
+    }
+  }
 
   // DOM Elements - Stepper
   const progressStepper = document.getElementById('progressStepper');
@@ -173,22 +221,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         colabStatusText.textContent = 'Google Colab Connected';
         notColabCard.classList.add('hidden');
 
-        // Extract clean name from tab title
-        let rawTitle = tab.title || '';
-        let cleanName = rawTitle.replace(/\s*-\s*Colaboratory/i, '').replace(/\s*-\s*Colab/i, '').trim();
-        if (cleanName && !cleanName.endsWith('.ipynb')) {
-          cleanName += '.ipynb';
-        }
-        if (!cleanName) cleanName = 'Colab_Notebook.ipynb';
-
-        notebookFileName.value = cleanName;
-        commitMessageInput.value = `Update ${cleanName} from Google Colab`;
-
         // Check if token exists
-        const { github_token } = await chrome.storage.local.get('github_token');
+        const { github_token, repo_name, branch, subfolder } = await chrome.storage.local.get([
+          'github_token',
+          'repo_name',
+          'branch',
+          'subfolder'
+        ]);
+
         if (github_token) {
           pushControlsCard.classList.remove('hidden');
         }
+
+        const targetRepo = repo_name || 'DSV_Colab';
+        let detectedName = '';
+        let fileExists = false;
+
+        // 1. Query active tab for live notebook info directly from Colab DOM
+        try {
+          const info = await chrome.tabs.sendMessage(tab.id, { action: 'GET_NOTEBOOK_INFO' });
+          if (info && info.filename) {
+            detectedName = info.filename;
+            fileExists = Boolean(info.existsOnGithub);
+          }
+        } catch (e) {
+          console.warn('Could not query Colab tab directly:', e);
+        }
+
+        // Fallback to title parsing if message didn't reply
+        if (!detectedName) {
+          let rawTitle = tab.title || '';
+          let clean = rawTitle
+            .replace(/\s*-\s*Colaboratory.*$/i, '')
+            .replace(/\s*-\s*Colab.*$/i, '')
+            .replace(/\s*-\s*Google Drive.*$/i, '')
+            .replace(/^Google Colab\s*-\s*/i, '')
+            .replace(/^Google Colaboratory\s*-\s*/i, '')
+            .trim();
+
+          if (clean && !/^Google\s*Colab(oratory)?$/i.test(clean) && !/^Welcome\s*to\s*Colab(oratory)?$/i.test(clean)) {
+            detectedName = clean.endsWith('.ipynb') ? clean : `${clean}.ipynb`;
+          } else {
+            detectedName = 'Colab_Notebook.ipynb';
+          }
+        }
+
+        notebookFileName.value = detectedName;
+
+        // If fileExists was not confirmed yet, verify directly with GitHub
+        if (github_token && !fileExists) {
+          let targetPath = detectedName;
+          if (subfolder && subfolder.trim()) {
+            targetPath = `${subfolder.trim().replace(/^\/+|\/+$/g, '')}/${detectedName}`;
+          }
+          try {
+            const checkRes = await chrome.runtime.sendMessage({
+              action: 'CHECK_FILE_EXISTS',
+              token: github_token,
+              repoName: targetRepo,
+              filePath: targetPath,
+              branch: branch || 'main'
+            });
+            if (checkRes?.success && checkRes.exists) {
+              fileExists = true;
+            }
+          } catch (e) {}
+        }
+
+        updatePushUIState(fileExists, detectedName, targetRepo);
       } else {
         isColabTab = false;
         colabStatus.className = 'colab-status disconnected';
@@ -353,6 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         viewOnGithubBtn.href = pushRes.fileUrl;
         viewCommitBtn.href = pushRes.commitUrl;
         successCard.classList.remove('hidden');
+        updatePushUIState(true, pushRes.filePath, pushRes.repoName);
       }, 500);
 
     } catch (err) {
@@ -362,16 +463,47 @@ document.addEventListener('DOMContentLoaded', async () => {
       errorCard.classList.remove('hidden');
     } finally {
       primaryPushBtn.disabled = false;
-      primaryPushBtnText.textContent = `Push to ${repoName}`;
+      primaryPushBtnText.textContent = currentFileExists ? `Update in ${repoName}` : `Push to ${repoName}`;
     }
   });
 
-  // Auto-update commit message when filename changes
+  // Dynamic file check and commit message update when user edits filename
+  let nameDebounceTimer = null;
   notebookFileName.addEventListener('input', () => {
-    let name = notebookFileName.value.trim();
-    if (name) {
-      commitMessageInput.value = `Update ${name} from Google Colab`;
-    }
+    clearTimeout(nameDebounceTimer);
+    nameDebounceTimer = setTimeout(async () => {
+      let name = notebookFileName.value.trim();
+      if (!name) return;
+      if (!name.endsWith('.ipynb')) name += '.ipynb';
+
+      const config = await chrome.storage.local.get(['github_token', 'repo_name', 'branch', 'subfolder']);
+      const token = config.github_token;
+      const repoName = config.repo_name || 'DSV_Colab';
+      const branch = config.branch || 'main';
+      const subfolder = config.subfolder || '';
+
+      let targetPath = name;
+      if (subfolder && subfolder.trim()) {
+        targetPath = `${subfolder.trim().replace(/^\/+|\/+$/g, '')}/${name}`;
+      }
+
+      if (token) {
+        try {
+          const res = await chrome.runtime.sendMessage({
+            action: 'CHECK_FILE_EXISTS',
+            token,
+            repoName,
+            filePath: targetPath,
+            branch
+          });
+          updatePushUIState(Boolean(res?.exists), name, repoName);
+        } catch (e) {
+          updatePushUIState(false, name, repoName);
+        }
+      } else {
+        updatePushUIState(false, name, repoName);
+      }
+    }, 400);
   });
 
   // Initialization

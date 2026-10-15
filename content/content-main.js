@@ -14,22 +14,68 @@
   console.log('[Colab to GitHub] Main world extractor active.');
 
   function getNotebookName() {
-    const titleInput = document.querySelector('input.filename, colab-filename input, input[aria-label="Notebook name"], #doc-name');
-    if (titleInput && titleInput.value && titleInput.value.trim()) {
-      let name = titleInput.value.trim();
+    // 1. Check all text inputs in the page that look like notebook titles
+    const inputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type]), input.editable, #header input'));
+    
+    // 1a. Input whose value ends with .ipynb
+    const ipynbInput = inputs.find(i => i.value && i.value.trim().endsWith('.ipynb'));
+    if (ipynbInput && ipynbInput.value.trim()) {
+      return ipynbInput.value.trim();
+    }
+
+    // 1b. Input with iron-googledrive-title, aria-label="Notebook filename", or title/name patterns
+    const titleAttrInput = inputs.find(i => {
+      const aria = (i.getAttribute('aria-label') || '').toLowerCase();
+      const title = (i.getAttribute('title') || '').toLowerCase();
+      const id = (i.id || '').toLowerCase();
+      const cls = (i.className || '').toLowerCase();
+      return aria.includes('notebook') || aria.includes('file') || 
+             title.includes('notebook') || title.includes('file') ||
+             id.includes('title') || id.includes('name') || 
+             cls.includes('title') || cls.includes('name') ||
+             i.hasAttribute('iron-googledrive-title');
+    });
+    if (titleAttrInput && titleAttrInput.value && titleAttrInput.value.trim()) {
+      let name = titleAttrInput.value.trim();
       return name.endsWith('.ipynb') ? name : `${name}.ipynb`;
     }
 
-    const titleEl = document.querySelector('colab-filename, .notebook-name, #doc-name');
-    if (titleEl && titleEl.textContent && titleEl.textContent.trim()) {
-      let name = titleEl.textContent.trim();
+    // 1c. Any input inside header/toolbar area (excluding search boxes)
+    const headerInput = document.querySelector('#header input, colab-header input, [role="banner"] input, colab-studio-toolbar input, colab-doc-name input');
+    if (headerInput && headerInput.value && headerInput.value.trim() && !headerInput.value.toLowerCase().includes('search')) {
+      let name = headerInput.value.trim();
       return name.endsWith('.ipynb') ? name : `${name}.ipynb`;
     }
 
-    const pageTitle = document.title || '';
-    const clean = pageTitle.replace(/\s*-\s*Colaboratory/i, '').replace(/\s*-\s*Colab/i, '').trim();
-    if (clean) {
-      return clean.endsWith('.ipynb') ? clean : `${clean}.ipynb`;
+    // 2. Look for DOM elements with notebook title or contenteditable in header
+    const titleContainers = document.querySelectorAll('#doc-name, .notebook-title, colab-doc-name, [data-doc-name]');
+    for (const el of titleContainers) {
+      const text = el.textContent?.trim();
+      if (text && !text.toLowerCase().includes('google colab')) {
+        return text.endsWith('.ipynb') ? text : `${text}.ipynb`;
+      }
+    }
+
+    // 3. Inspect document.title thoroughly
+    const docTitle = document.title || '';
+    if (docTitle) {
+      let clean = docTitle
+        .replace(/\s*-\s*Colaboratory.*$/i, '')
+        .replace(/\s*-\s*Colab.*$/i, '')
+        .replace(/\s*-\s*Google Drive.*$/i, '')
+        .replace(/^Google Colab\s*-\s*/i, '')
+        .replace(/^Google Colaboratory\s*-\s*/i, '')
+        .trim();
+
+      if (clean && !/^Google\s*Colab(oratory)?$/i.test(clean) && !/^Welcome\s*to\s*Colab(oratory)?$/i.test(clean)) {
+        return clean.endsWith('.ipynb') ? clean : `${clean}.ipynb`;
+      }
+    }
+
+    // 4. Check URL if opened from GitHub or Drive
+    const ghMatch = window.location.pathname.match(/\/([^/]+\.ipynb)$/i);
+    if (ghMatch && ghMatch[1]) {
+      return decodeURIComponent(ghMatch[1]);
     }
 
     return 'Colab_Notebook.ipynb';

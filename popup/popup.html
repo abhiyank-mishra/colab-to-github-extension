@@ -68,11 +68,18 @@
               <span class="branch-icon"></span>
               <span id="displayBranchName" class="branch-value">main</span>
             </div>
+            <div id="fileModeBadge" class="mode-pill new">
+              <span id="fileModeText">✨ New</span>
+            </div>
           </div>
 
           <div class="form-group">
-            <label for="notebookFileName">Notebook File Name</label>
+            <div class="label-row">
+              <label for="notebookFileName">Notebook File Name</label>
+              <span id="fileStatusIndicator" class="file-status-indicator"></span>
+            </div>
             <input type="text" id="notebookFileName" placeholder="notebook.ipynb" spellcheck="false">
+            <p id="fileExistingHint" class="field-hint hidden"></p>
           </div>
 
           <div class="form-group">
@@ -81,7 +88,7 @@
           </div>
 
           <button id="primaryPushBtn" class="btn btn-primary btn-block">
-            <span class="btn-icon">🚀</span>
+            <span id="primaryPushBtnIcon" class="btn-icon">🚀</span>
             <span id="primaryPushBtnText">Push to DSV_Colab</span>
           </button>
         </div>

@@ -57,6 +57,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // asynchronous response
   }
 
+  if (request.action === 'CHECK_FILE_EXISTS') {
+    (async () => {
+      try {
+        const result = await GitHubAPI.checkFileExists(
+          request.token || DEFAULT_USER_TOKEN,
+          request.repoName || 'DSV_Colab',
+          request.filePath,
+          request.branch || 'main'
+        );
+        sendResponse({ success: true, ...result });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true; // asynchronous response
+  }
+
   if (request.action === 'EXECUTE_GITHUB_PUSH') {
     (async () => {
       try {

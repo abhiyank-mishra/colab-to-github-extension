@@ -40,6 +40,23 @@
   pointer-events: none;
 }
 
+.c2gh-floating-btn.update-mode {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: #0f172a;
+}
+
+.c2gh-floating-btn.update-mode:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(56, 189, 248, 0.3);
+}
+
+.c2gh-floating-btn.update-mode .c2gh-btn-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
 .c2gh-btn-icon {
   display: flex;
   align-items: center;

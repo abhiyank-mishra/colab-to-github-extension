@@ -227,6 +227,56 @@ body {
   font-weight: 600;
 }
 
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.mode-pill.new {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.35);
+}
+
+.mode-pill.update {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.file-status-indicator {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.file-status-indicator.existing {
+  color: #38bdf8;
+}
+
+.file-status-indicator.new {
+  color: #3fb950;
+}
+
+.file-existing-hint {
+  font-size: 11px;
+  color: #38bdf8;
+  margin-top: 4px;
+}
+
+.btn-update {
+  background: #1f6feb !important;
+  color: #ffffff !important;
+}
+
+.btn-update:hover {
+  background: #388bfd !important;
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 12px;

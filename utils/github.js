@@ -105,6 +105,44 @@ const GitHubAPI = {
   },
 
   /**
+   * Check if a specific file exists in the repository
+   */
+  async checkFileExists(token, repoName = 'DSV_Colab', filePath, branch = 'main') {
+    if (!token || !filePath) return { exists: false };
+    try {
+      const user = await this.getUser(token);
+      let normalizedPath = filePath.trim();
+      if (!normalizedPath.toLowerCase().endsWith('.ipynb')) {
+        normalizedPath += '.ipynb';
+      }
+
+      const res = await fetch(
+        `${this.BASE_URL}/repos/${user.login}/${repoName.trim()}/contents/${encodeURIComponent(normalizedPath)}?ref=${branch || 'main'}`,
+        {
+          method: 'GET',
+          headers: this.getHeaders(token)
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          exists: true,
+          sha: data.sha,
+          filePath: normalizedPath,
+          fileUrl: data.html_url,
+          username: user.login,
+          repoName: repoName.trim(),
+          branch: branch || 'main'
+        };
+      }
+      return { exists: false, filePath: normalizedPath };
+    } catch (e) {
+      return { exists: false, error: e.message };
+    }
+  },
+
+  /**
    * Push or update a notebook file in the repository
    */
   async pushNotebook({
