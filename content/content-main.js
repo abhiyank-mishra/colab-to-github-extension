@@ -13,6 +13,25 @@
 
   console.log('[Colab to GitHub] Main world extractor active.');
 
+  // Permanent Blob Cache (captures any notebook downloaded or saved by Colab)
+  let cachedNotebookJson = null;
+  try {
+    const rawCreateObjectURL = window.URL.createObjectURL;
+    window.URL.createObjectURL = function (blob) {
+      const url = rawCreateObjectURL.apply(this, arguments);
+      if (blob && typeof blob.text === 'function') {
+        blob.text().then(text => {
+          if (text && (text.includes('"cells"') || text.includes('"nbformat"'))) {
+            cachedNotebookJson = text;
+            window.__COLAB_CACHED_NOTEBOOK__ = text;
+            console.log('[Colab to GitHub] Captured active notebook JSON via createObjectURL.');
+          }
+        }).catch(() => {});
+      }
+      return url;
+    };
+  } catch (e) {}
+
   function getNotebookName() {
     // 1. Check all text inputs in the page that look like notebook titles
     const inputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type]), input.editable, #header input'));
@@ -287,9 +306,126 @@
     });
   }
 
-  // Extract notebook content using primary method with clean fallbacks
+  // Try extracting directly from Monaco Editor text models
+  function tryExtractFromMonaco() {
+    try {
+      if (typeof window.monaco !== 'undefined' && window.monaco.editor) {
+        const models = window.monaco.editor.getModels();
+        if (models && models.length > 0) {
+          const cells = [];
+          models.forEach((model, idx) => {
+            const uri = model.uri ? model.uri.toString() : '';
+            if (uri.includes('schema') || uri.includes('output') || uri.includes('diff')) return;
+            const text = model.getValue();
+            if (text !== undefined && text !== null) {
+              const lines = text.split('\n').map((l, i, arr) => (i < arr.length - 1 ? `${l}\n` : l));
+              cells.push({
+                cell_type: 'code',
+                execution_count: idx + 1,
+                metadata: { id: `monaco_cell_${idx}` },
+                outputs: [],
+                source: lines
+              });
+            }
+          });
+
+          if (cells.length > 0) {
+            const ipynb = {
+              nbformat: 4,
+              nbformat_minor: 0,
+              metadata: {
+                colab: { provenance: [] },
+                kernelspec: { name: 'python3', display_name: 'Python 3' },
+                language_info: { name: 'python' }
+              },
+              cells
+            };
+            console.log(`[Colab to GitHub] Extracted ${cells.length} cells from Monaco Editor models.`);
+            return JSON.stringify(ipynb, null, 2);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[Colab to GitHub] Monaco extractor notice:', e.message);
+    }
+    return null;
+  }
+
+  // Try extracting from Colab custom element models
+  function tryExtractFromColabElements() {
+    try {
+      const cellEls = document.querySelectorAll('colab-cell');
+      if (cellEls && cellEls.length > 0) {
+        const cells = [];
+        cellEls.forEach((el, idx) => {
+          const cellModel = el.cellModel || el.model;
+          let text = '';
+          let isCode = true;
+
+          if (cellModel) {
+            text = cellModel.text || cellModel.source || '';
+            isCode = cellModel.type !== 'markdown';
+          }
+
+          if (!text) {
+            const ed = el.querySelector('.monaco-editor, textarea, pre');
+            if (ed) {
+              const lines = ed.querySelectorAll('.view-line');
+              if (lines.length > 0) {
+                text = Array.from(lines).map(l => l.textContent).join('\n');
+              } else {
+                text = ed.textContent || ed.value || '';
+              }
+            } else {
+              text = el.textContent || '';
+            }
+          }
+
+          const formattedLines = text.split('\n').map((l, i, arr) => (i < arr.length - 1 ? `${l}\n` : l));
+          cells.push({
+            cell_type: isCode ? 'code' : 'markdown',
+            execution_count: idx + 1,
+            metadata: { id: `cell_${idx}` },
+            outputs: [],
+            source: formattedLines
+          });
+        });
+
+        if (cells.length > 0) {
+          const ipynb = {
+            nbformat: 4,
+            nbformat_minor: 0,
+            metadata: {
+              colab: { provenance: [] },
+              kernelspec: { name: 'python3', display_name: 'Python 3' },
+              language_info: { name: 'python' }
+            },
+            cells
+          };
+          console.log(`[Colab to GitHub] Extracted ${cells.length} cells from Colab custom elements.`);
+          return JSON.stringify(ipynb, null, 2);
+        }
+      }
+    } catch (e) {
+      console.log('[Colab to GitHub] Custom element extractor notice:', e.message);
+    }
+    return null;
+  }
+
+  // Extract notebook content using prioritized multi-tier strategies
   async function extractNotebook() {
     const filename = getNotebookName();
+
+    // Strategy 0: Check memory-cached notebook from permanent blob interceptor
+    if (cachedNotebookJson && (cachedNotebookJson.includes('"cells"') || cachedNotebookJson.includes('"nbformat"'))) {
+      console.log('[Colab to GitHub] Using memory-cached notebook.');
+      return {
+        success: true,
+        filename,
+        content: cachedNotebookJson,
+        method: 'memory-cache'
+      };
+    }
 
     // Strategy 1: Check internal Colab model
     const internalModel = tryExtractFromInternalModel();
@@ -304,8 +440,9 @@
 
     // Strategy 2: Intercept native Colab download
     try {
-      const intercepted = await triggerColabDownloadAndIntercept(2200);
+      const intercepted = await triggerColabDownloadAndIntercept(1600);
       if (intercepted && intercepted.content) {
+        cachedNotebookJson = intercepted.content;
         return {
           success: true,
           filename: intercepted.filename || filename,
@@ -315,7 +452,42 @@
       }
     } catch (e) {}
 
-    // Strategy 3: Check if Google Drive fileId exists (delegate to background via content.js)
+    // Strategy 3: Try Monaco editor models
+    const monacoContent = tryExtractFromMonaco();
+    if (monacoContent) {
+      return {
+        success: true,
+        filename,
+        content: monacoContent,
+        method: 'monaco-models'
+      };
+    }
+
+    // Strategy 4: Try Colab custom element models
+    const elemContent = tryExtractFromColabElements();
+    if (elemContent) {
+      return {
+        success: true,
+        filename,
+        content: elemContent,
+        method: 'custom-elements'
+      };
+    }
+
+    // Strategy 5: Full DOM scraping fallback
+    try {
+      const domContent = reconstructFromDOM();
+      if (domContent) {
+        return {
+          success: true,
+          filename,
+          content: domContent,
+          method: 'dom-reconstruction'
+        };
+      }
+    } catch (e) {}
+
+    // Strategy 6: If all in-page extractions failed, check Google Drive fileId delegate
     const driveMatch = window.location.pathname.match(/\/drive\/([a-zA-Z0-9_-]+)/);
     if (driveMatch && driveMatch[1]) {
       return {
@@ -327,21 +499,10 @@
       };
     }
 
-    // Strategy 4: High-fidelity DOM scraping & reconstruction
-    try {
-      const domContent = reconstructFromDOM();
-      return {
-        success: true,
-        filename,
-        content: domContent,
-        method: 'dom-reconstruction'
-      };
-    } catch (e) {
-      return {
-        success: false,
-        error: `Extraction failed: ${e.message}`
-      };
-    }
+    return {
+      success: false,
+      error: 'Could not extract notebook content through any strategy.'
+    };
   }
 
   // Listen for extraction requests from content.js (ISOLATED world)

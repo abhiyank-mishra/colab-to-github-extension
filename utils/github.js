@@ -157,8 +157,8 @@ const GitHubAPI = {
     if (!filePath) {
       throw new Error('File name / path cannot be empty.');
     }
-    if (!content) {
-      throw new Error('Notebook content is empty.');
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      throw new Error(`Notebook content is empty or invalid (type: ${typeof content}, length: ${content?.length || 0}).`);
     }
 
     // Ensure repo exists or create it
@@ -186,8 +186,17 @@ const GitHubAPI = {
       existingSha = fileData.sha;
     }
 
+    // Format JSON with 2 spaces indentation for clean Git diffs
+    let formattedContent = content;
+    try {
+      const parsed = JSON.parse(content);
+      formattedContent = JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      formattedContent = content;
+    }
+
     // Prepare commit body
-    const base64Content = this.toBase64(content);
+    const base64Content = this.toBase64(formattedContent);
     const finalCommitMessage = commitMessage || (existingSha 
       ? `Update ${normalizedPath} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`
       : `Add ${normalizedPath} from Google Colab [${new Date().toISOString().replace('T', ' ').slice(0, 19)}]`);

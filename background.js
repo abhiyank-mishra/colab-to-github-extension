@@ -150,12 +150,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'EXECUTE_GITHUB_PUSH') {
     (async () => {
       try {
+        if (!request.content || typeof request.content !== 'string' || !request.content.trim()) {
+          sendResponse({ success: false, error: 'Notebook payload received by background service worker was empty.' });
+          return;
+        }
+
         const result = await GitHubAPI.pushNotebook({
           token: request.token || DEFAULT_USER_TOKEN,
           repoName: request.repoName || 'DSV_Colab',
           branch: request.branch || 'main',
           filePath: request.filePath,
-          content: request.content,
+          content: request.content.trim(),
           commitMessage: request.commitMessage,
           isPrivate: Boolean(request.isPrivate)
         });

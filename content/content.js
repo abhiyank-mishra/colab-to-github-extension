@@ -416,8 +416,9 @@
         content = reconstructNotebookFromDOM();
       }
 
-      if (!content || !content.trim()) {
-        throw new Error('Could not retrieve notebook content. Please make sure the notebook is open.');
+      // Pre-flight assertion: ensure content is valid non-empty string
+      if (!content || typeof content !== 'string' || content.trim().length < 20) {
+        throw new Error('Notebook extraction failed: Content was empty. Please check your notebook cells.');
       }
 
       // Priority: use the accurately detected filename
