@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colab to GitHub</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="6" fill="#161B22"/>
+            <path d="M12 4C7.58 4 4 7.58 4 12c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0020 12c0-4.42-3.58-8-8-8z" fill="#F0F6FC"/>
+          </svg>
+        </div>
+        <div class="header-titles">
+          <h1 class="app-title">Colab to GitHub</h1>
+          <div id="colabStatus" class="colab-status checking">
+            <span class="status-dot"></span>
+            <span id="colabStatusText">Checking Colab tab...</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="tabPushBtn" class="nav-tab active" title="Push View">Push</button>
+        <button id="tabSettingsBtn" class="nav-tab" title="Settings">Settings</button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- PUSH VIEW -->
+      <section id="pushView" class="view-panel active">
+        <!-- Token Warning Banner (if token missing) -->
+        <div id="tokenWarningCard" class="card warning-card hidden">
+          <div class="card-icon">🔑</div>
+          <div class="card-content">
+            <h4>GitHub Token Setup</h4>
+            <p>Connect your GitHub account to push Colab notebooks in 1-click.</p>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button id="autoConnectTokenBtn" class="btn btn-sm btn-primary">⚡ 1-Click Auto Connect</button>
+              <button id="goToSettingsBtn" class="btn btn-sm btn-outline">Custom Token</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Colab Not Active Banner -->
+        <div id="notColabCard" class="card info-card hidden">
+          <div class="card-icon">💡</div>
+          <div class="card-content">
+            <h4>No Colab Tab Active</h4>
+            <p>Please navigate to an active Google Colab notebook tab to push it.</p>
+          </div>
+        </div>
+
+        <!-- Push Controls Card -->
+        <div id="pushControlsCard" class="card main-card">
+          <div class="repo-meta-row">
+            <div class="repo-pill">
+              <span class="repo-label">Repo:</span>
+              <span id="displayRepoName" class="repo-value">DSV_Colab</span>
+            </div>
+            <div class="branch-pill">
+              <span class="branch-icon"></span>
+              <span id="displayBranchName" class="branch-value">main</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="notebookFileName">Notebook File Name</label>
+            <input type="text" id="notebookFileName" placeholder="notebook.ipynb" spellcheck="false">
+          </div>
+
+          <div class="form-group">
+            <label for="commitMessageInput">Commit Message</label>
+            <input type="text" id="commitMessageInput" placeholder="Update notebook from Google Colab">
+          </div>
+
+          <button id="primaryPushBtn" class="btn btn-primary btn-block">
+            <span class="btn-icon">🚀</span>
+            <span id="primaryPushBtnText">Push to DSV_Colab</span>
+          </button>
+        </div>
+
+        <!-- Progress Stepper (Visible during push) -->
+        <div id="progressStepper" class="stepper-card hidden">
+          <div class="stepper-title">Pushing Notebook...</div>
+          <div class="stepper-list">
+            <div id="stepExtract" class="stepper-item active">
+              <span class="step-indicator"></span>
+              <span class="step-label">Extracting Colab notebook (.ipynb)</span>
+            </div>
+            <div id="stepRepo" class="stepper-item">
+              <span class="step-indicator"></span>
+              <span class="step-label">Checking / Creating repository</span>
+            </div>
+            <div id="stepPush" class="stepper-item">
+              <span class="step-indicator"></span>
+              <span class="step-label">Committing & pushing to GitHub</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Result Card -->
+        <div id="successCard" class="card success-card hidden">
+          <div class="success-header">
+            <span class="success-icon">🎉</span>
+            <div>
+              <h4 id="successTitle">Successfully Pushed!</h4>
+              <p id="successSubtitle" class="text-muted">Pushed to DSV_Colab on branch main</p>
+            </div>
+          </div>
+          <div class="success-actions">
+            <a id="viewOnGithubBtn" href="#" target="_blank" class="btn btn-primary btn-sm">
+              View on GitHub ↗
+            </a>
+            <a id="viewCommitBtn" href="#" target="_blank" class="btn btn-outline btn-sm">
+              Commit ↗
+            </a>
+          </div>
+        </div>
+
+        <!-- Error Card -->
+        <div id="errorCard" class="card error-card hidden">
+          <div class="error-header">
+            <span class="error-icon">❌</span>
+            <div class="error-content">
+              <h4>Push Failed</h4>
+              <p id="errorMessageText">An unknown error occurred.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS VIEW -->
+      <section id="settingsView" class="view-panel hidden">
+        <div class="card settings-card">
+          <h3 class="section-heading">GitHub Configuration</h3>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="githubTokenInput">Personal Access Token (PAT) *</label>
+              <a href="https://github.com/settings/tokens/new?scopes=repo&description=Colab+to+GitHub+DSV_Colab" target="_blank" class="helper-link">
+                Generate Token ↗
+              </a>
+            </div>
+            <div class="input-with-button">
+              <input type="password" id="githubTokenInput" placeholder="ghp_xxxxxxxxxxxx" spellcheck="false">
+              <button id="toggleTokenVisibility" class="btn-icon-only" title="Show/Hide Token">👁️</button>
+            </div>
+            <p class="field-hint">Token needs the <code>repo</code> scope to check, create, and push commits.</p>
+          </div>
+
+          <div class="token-verify-row">
+            <button id="autoFillTokenBtn" class="btn btn-primary btn-sm">⚡ Use Default Token</button>
+            <button id="verifyTokenBtn" class="btn btn-outline btn-sm">Verify Token</button>
+            <div id="tokenVerifyStatus" class="verify-status hidden"></div>
+          </div>
+
+          <hr class="divider">
+
+          <div class="form-group">
+            <label for="repoNameInput">Target Repository Name</label>
+            <input type="text" id="repoNameInput" value="DSV_Colab" spellcheck="false">
+            <p class="field-hint">If this repo doesn't exist on your GitHub, it will be created automatically.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="branchNameInput">Default Branch</label>
+            <input type="text" id="branchNameInput" value="main" spellcheck="false">
+          </div>
+
+          <div class="form-group">
+            <label for="subfolderInput">Subfolder (Optional)</label>
+            <input type="text" id="subfolderInput" placeholder="e.g. colab_notebooks (or leave empty for root)" spellcheck="false">
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox-container">
+              <input type="checkbox" id="isPrivateCheckbox">
+              <span class="checkmark"></span>
+              <span class="checkbox-label">Make repository private if created automatically</span>
+            </label>
+          </div>
+
+          <button id="saveSettingsBtn" class="btn btn-primary btn-block">Save Settings</button>
+          <div id="settingsFeedback" class="save-feedback hidden">Settings saved successfully!</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>Auto-pushes to <strong>DSV_Colab</strong></span>
+      <span>v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
