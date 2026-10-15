@@ -74,6 +74,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // asynchronous response
   }
 
+  if (request.action === 'FETCH_DRIVE_NOTEBOOK') {
+    (async () => {
+      try {
+        const fileId = request.fileId;
+        const res = await fetch(`https://docs.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && (text.includes('"cells"') || text.includes('"nbformat"'))) {
+            sendResponse({ success: true, content: text });
+            return;
+          }
+        }
+        sendResponse({ success: false, error: `Drive download status: ${res.status}` });
+      } catch (e) {
+        sendResponse({ success: false, error: e.message });
+      }
+    })();
+    return true; // asynchronous response
+  }
+
   if (request.action === 'EXECUTE_GITHUB_PUSH') {
     (async () => {
       try {

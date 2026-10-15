@@ -324,8 +324,27 @@
     try {
       // 1. Extract notebook
       const extractResult = await requestExtraction();
-      if (!extractResult.success) {
+      if (!extractResult.success && !extractResult.needsDriveFetch) {
         throw new Error(extractResult.error || 'Failed to extract notebook content.');
+      }
+
+      let content = extractResult.content;
+      if (extractResult.needsDriveFetch && extractResult.fileId && !content) {
+        try {
+          const driveRes = await chrome.runtime.sendMessage({
+            action: 'FETCH_DRIVE_NOTEBOOK',
+            fileId: extractResult.fileId
+          });
+          if (driveRes && driveRes.success && driveRes.content) {
+            content = driveRes.content;
+          }
+        } catch (e) {
+          console.warn('[Colab to GitHub] Background drive fetch error:', e);
+        }
+      }
+
+      if (!content) {
+        throw new Error('Could not retrieve notebook content. Please make sure the notebook is open.');
       }
 
       // Priority: use the accurately detected filename
@@ -440,9 +459,26 @@
     }
 
     if (request.action === 'EXTRACT_FROM_PAGE') {
-      requestExtraction().then(result => {
+      requestExtraction().then(async (result) => {
+        let content = result.content;
+        if (result.needsDriveFetch && result.fileId && !content) {
+          try {
+            const driveRes = await chrome.runtime.sendMessage({
+              action: 'FETCH_DRIVE_NOTEBOOK',
+              fileId: result.fileId
+            });
+            if (driveRes && driveRes.success && driveRes.content) {
+              content = driveRes.content;
+            }
+          } catch (e) {
+            console.warn('[Colab to GitHub] Background drive fetch error:', e);
+          }
+        }
+
         sendResponse({
           ...result,
+          success: Boolean(content),
+          content,
           filename: result.filename || getNotebookName()
         });
       });
